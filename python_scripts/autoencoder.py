@@ -101,7 +101,7 @@ plt.show()
 
 
 
-img = next(train_generator)[:1]
+img = next(train_generator)
 decod_img = autoencoder.predict(img)
 img = (img[0]*255).astype('uint8')
 decod_img = (decod_img[0]*255).astype('uint8')
