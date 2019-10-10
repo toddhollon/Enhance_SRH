@@ -16,6 +16,7 @@ import numpy as np
 from keras.layers import Input, Dense
 from keras.models import Model
 from keras.optimizers import Adam
+from keras.metrics import mae
 from keras.preprocessing.image import ImageDataGenerator
 from keras.layers import Input, Dense, Conv2D, MaxPooling2D, UpSampling2D
 from keras.models import Model
@@ -89,8 +90,10 @@ def denoising_generator(generator, noise_function = gaussian_noise_generator):
         noisy_batch = noise_function(batch)
         yield noisy_batch, batch
 
-def psnr(image1, image2, metric = "mae"):
-    
+def psnr_mae(image1, image2):
+    error = np.abs(np.mean(np.subtract(image1.astype(float), image2.astype(float))))
+    psnr = 10 * np.log10(255/error)
+    return psnr
 
 
 def plotting_function_inference(img, noisy_img, pred_img):
@@ -102,15 +105,17 @@ def plotting_function_inference(img, noisy_img, pred_img):
 
     ax2 = fig.add_subplot(1,3,2)
     ax2.imshow(noisy_img)
-    ax2.set_title("Noisy image: PSNR = " + str(np.round(compare_psnr(img, noisy_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, noisy_img, multichannel=True), decimals=3)))
+    ax2.set_title("Noisy image: PSNR = " + str(np.round(psnr_mae(img, noisy_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, noisy_img, multichannel=True), decimals=3)))
 
     ax3 = fig.add_subplot(1,3,3)
     ax3.imshow(pred_img)
-    ax3.set_title("Denoising UNet prediction: PSNR = " + str(np.round(compare_psnr(img, pred_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, pred_img, multichannel=True), decimals=3)))
+    ax3.set_title("UNet prediction: PSNR = " + str(np.round(psnr_mae(img, pred_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, pred_img, multichannel=True), decimals=3)))
 
     plt.suptitle("Enhancing stimulated Raman histology")
     plt.show()
 
+
+def iterate_generator()
 
 
 input_img = Input(shape=(HEIGHT, WIDTH, CHANNELS))
@@ -126,6 +131,7 @@ denoiser.compile(optimizer = Adam(lr = 0.001), loss = 'mean_absolute_error', met
 if __name__ == "__main__":
     
     training_directory = "/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/training"
+    validation_directory = "/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation"
 
     HEIGHT, WIDTH, CHANNELS = 256, 256, 3
     BATCH_SIZE = 10
@@ -140,7 +146,15 @@ if __name__ == "__main__":
         batch_size = BATCH_SIZE, shuffle = True)
         # save_to_dir = "/home/todd/Desktop/test_dir/keras_save_dir")
 
-    Unet = unet(input_size = (HEIGHT, WIDTH, 3))
+    validation_generator = ImageDataGenerator(
+        horizontal_flip=True,
+        vertical_flip=True,
+        preprocessing_function = nio_preprocessing_function,
+        data_format = "channels_last").flow_from_directory(directory = validation_directory, 
+        target_size = (HEIGHT, WIDTH), interpolation = "bicubic", color_mode = 'rgb', classes = None, class_mode = None, 
+        batch_size = BATCH_SIZE, shuffle = True)
+    
+    Unet = unet(input_size = (HEIGHT, WIDTH, CHANNELS))
     
     adam = Adam(lr=0.0005)
     denoiser.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
@@ -151,16 +165,15 @@ if __name__ == "__main__":
                     shuffle=True)
 
 
-img_stack = next(train_generator)
-noisy_img_stack = gaussian_noise_generator(img_stack)
-decod_img_stack = Unet.predict(noisy_img_stack)
+    # img_stack = next(train_generator)
+    img_stack = next(validation_generator)
+    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(50, 51))
+    decod_img_stack = Unet.predict(noisy_img_stack)
+    index = 7
+    img = channel_rescaling(img_stack[index,:,:,:])
+    noisy_img = channel_rescaling(noisy_img_stack[index,:,:,:])
+    decod_img = channel_rescaling(decod_img_stack[index,:,:,:])
+    plotting_function_inference(img, noisy_img, decod_img)
 
-index = 8
-img = channel_rescaling(img_stack[index,:,:,:])
-noisy_img = channel_rescaling(noisy_img_stack[index,:,:,:])
-decod_img = channel_rescaling(decod_img_stack[index,:,:,:])
-plotting_function_inference(img, noisy_img, decod_img)
 
-plt.imshow(np.hstack((img, noisy_img, decod_img)))
-plt.show()
 
