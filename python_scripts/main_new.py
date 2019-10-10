@@ -70,7 +70,6 @@ def uniform_noise_generator(batch, sigma = 100):
     batch = batch + (noise * sigma)   
     # batch = batch.clip(min=-127, max=127)    
 
-
     return batch
 
 def gaussian_noise_generator(batch, sigma_range = (25,100)):
