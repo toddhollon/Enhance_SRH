@@ -7,8 +7,7 @@ Ideas for paper
     c) Local noise generator
 
 Ideas:
-RANDOM NOISE GENERATION
-
+Empirical versus random noise generation
 
 '''
 
