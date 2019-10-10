@@ -8,7 +8,7 @@ Ideas for paper
 
 Ideas:
 RANDOM NOISE GENERATION
-
+Perceptual metrics
 
 '''
 
@@ -22,6 +22,7 @@ from keras.models import Model
 from keras import backend as K
 import matplotlib.pyplot as plt
 from model import unet
+from skimage.measure import compare_psnr, compare_ssim
 
 def nio_preprocessing_function(image):
     """
@@ -70,7 +71,6 @@ def uniform_noise_generator(batch, sigma = 100):
     batch = batch + (noise * sigma)   
     # batch = batch.clip(min=-127, max=127)    
 
-
     return batch
 
 def gaussian_noise_generator(batch, sigma_range = (25,100)):
@@ -89,6 +89,29 @@ def denoising_generator(generator, noise_function = gaussian_noise_generator):
         noisy_batch = noise_function(batch)
         yield noisy_batch, batch
 
+def psnr(image1, image2, metric = "mae"):
+    
+
+
+def plotting_function_inference(img, noisy_img, pred_img):
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(1,3,1)
+    ax1.imshow(img)
+    ax1.set_title("Full resolution image")
+
+    ax2 = fig.add_subplot(1,3,2)
+    ax2.imshow(noisy_img)
+    ax2.set_title("Noisy image: PSNR = " + str(np.round(compare_psnr(img, noisy_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, noisy_img, multichannel=True), decimals=3)))
+
+    ax3 = fig.add_subplot(1,3,3)
+    ax3.imshow(pred_img)
+    ax3.set_title("Denoising UNet prediction: PSNR = " + str(np.round(compare_psnr(img, pred_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, pred_img, multichannel=True), decimals=3)))
+
+    plt.suptitle("Enhancing stimulated Raman histology")
+    plt.show()
+
+
 
 input_img = Input(shape=(HEIGHT, WIDTH, CHANNELS))
 x = Conv2D(8, (3, 3), activation='relu', padding='same')(input_img)
@@ -104,8 +127,8 @@ if __name__ == "__main__":
     
     training_directory = "/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/training"
 
-    HEIGHT, WIDTH, CHANNELS = 300, 300, 3
-    BATCH_SIZE = 32
+    HEIGHT, WIDTH, CHANNELS = 256, 256, 3
+    BATCH_SIZE = 10
 
     # Define the generator
     train_generator = ImageDataGenerator(
@@ -117,25 +140,26 @@ if __name__ == "__main__":
         batch_size = BATCH_SIZE, shuffle = True)
         # save_to_dir = "/home/todd/Desktop/test_dir/keras_save_dir")
 
-    # Unet = unet(input_size = (HEIGHT, WIDTH, 3))
+    Unet = unet(input_size = (HEIGHT, WIDTH, 3))
     
     adam = Adam(lr=0.0005)
     denoiser.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
 
-    denoiser.fit_generator(denoising_generator(train_generator),
-                    epochs=10,
-                    steps_per_epoch=600,
+    Unet.fit_generator(denoising_generator(train_generator),
+                    epochs=30,
+                    steps_per_epoch=1500,
                     shuffle=True)
 
 
 img_stack = next(train_generator)
 noisy_img_stack = gaussian_noise_generator(img_stack)
-decod_img_stack = denoiser.predict(noisy_img_stack)
+decod_img_stack = Unet.predict(noisy_img_stack)
 
-index = 4
+index = 8
 img = channel_rescaling(img_stack[index,:,:,:])
 noisy_img = channel_rescaling(noisy_img_stack[index,:,:,:])
 decod_img = channel_rescaling(decod_img_stack[index,:,:,:])
+plotting_function_inference(img, noisy_img, decod_img)
 
 plt.imshow(np.hstack((img, noisy_img, decod_img)))
 plt.show()
