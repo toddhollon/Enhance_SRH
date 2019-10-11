@@ -7,7 +7,8 @@ Ideas for paper
     c) Local noise generator
 
 Ideas:
-Empirical versus random noise generation
+RANDOM NOISE GENERATION
+Perceptual metrics
 
 '''
 
@@ -94,7 +95,6 @@ def psnr_mae(image1, image2):
     psnr = 10 * np.log10(255/error)
     return psnr
 
-
 def plotting_function_inference(img, noisy_img, pred_img):
 
     fig = plt.figure()
@@ -114,7 +114,18 @@ def plotting_function_inference(img, noisy_img, pred_img):
     plt.show()
 
 
-def iterate_generator()
+def iterate_generator(generator, model):
+
+    # img_stack = next(train_generator)
+    img_stack = next(validation_generator)
+    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(50, 51))
+    decod_img_stack = model.predict(noisy_img_stack)
+    
+    img = channel_rescaling(img_stack[0,:,:,:])
+    noisy_img = channel_rescaling(noisy_img_stack[0,:,:,:])
+    decod_img = channel_rescaling(decod_img_stack[0,:,:,:])
+    plotting_function_inference(img, noisy_img, decod_img)
+
 
 
 input_img = Input(shape=(HEIGHT, WIDTH, CHANNELS))
@@ -173,6 +184,4 @@ if __name__ == "__main__":
     noisy_img = channel_rescaling(noisy_img_stack[index,:,:,:])
     decod_img = channel_rescaling(decod_img_stack[index,:,:,:])
     plotting_function_inference(img, noisy_img, decod_img)
-
-
 
