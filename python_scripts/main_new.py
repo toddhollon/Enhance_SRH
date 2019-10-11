@@ -177,7 +177,8 @@ if __name__ == "__main__":
 
     # img_stack = next(train_generator)
     img_stack = next(validation_generator)
-    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(50, 51))
+
+    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(400, 401))
     decod_img_stack = Unet.predict(noisy_img_stack)
     index = 7
     img = channel_rescaling(img_stack[index,:,:,:])
