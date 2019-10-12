@@ -174,5 +174,5 @@ if __name__ == "__main__":
     decod_img = channel_rescaling(decod_img_stack[index,:,:,:])
     plotting_function_inference(img, noisy_img, decod_img)
 
-
+    
 
