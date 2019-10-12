@@ -225,5 +225,5 @@ if __name__ == "__main__":
 
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/IDHmut_1p19qnormal/NIO472_1_414.tif", model = unet, sigma=100)
 
-
+    
 
