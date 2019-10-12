@@ -10,7 +10,7 @@ from keras.callbacks import ModelCheckpoint, LearningRateScheduler
 from keras import backend as keras
 
 
-def unet(input_size, pretrained_weights = None):
+def Unet(input_size, pretrained_weights = None):
     inputs = Input(input_size)
     conv1 = Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(inputs)
     conv1 = Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv1)
@@ -59,3 +59,30 @@ def unet(input_size, pretrained_weights = None):
     return model
 
 
+def DnCNN(depth,filters=64,image_channels=1, use_bnorm=True):
+    # https://github.com/cszn/DnCNN/blob/master/TrainingCodes/dncnn_keras/main_train.py
+    layer_count = 0
+    inpt = Input(shape=(None,None,image_channels),name = 'input'+str(layer_count))
+    # 1st layer, Conv+relu
+    layer_count += 1
+    x = Conv2D(filters=filters, kernel_size=(3,3), strides=(1,1),kernel_initializer='Orthogonal', padding='same',name = 'conv'+str(layer_count))(inpt)
+    layer_count += 1
+    x = Activation('relu',name = 'relu'+str(layer_count))(x)
+    # depth-2 layers, Conv+BN+relu
+    for i in range(depth-2):
+        layer_count += 1
+        x = Conv2D(filters=filters, kernel_size=(3,3), strides=(1,1),kernel_initializer='Orthogonal', padding='same',use_bias = False,name = 'conv'+str(layer_count))(x)
+        if use_bnorm:
+            layer_count += 1
+            #x = BatchNormalization(axis=3, momentum=0.1,epsilon=0.0001, name = 'bn'+str(layer_count))(x) 
+        x = BatchNormalization(axis=3, momentum=0.0,epsilon=0.0001, name = 'bn'+str(layer_count))(x)
+        layer_count += 1
+        x = Activation('relu',name = 'relu'+str(layer_count))(x)  
+    # last layer, Conv
+    layer_count += 1
+    x = Conv2D(filters=image_channels, kernel_size=(3,3), strides=(1,1), kernel_initializer='Orthogonal',padding='same',use_bias = False,name = 'conv'+str(layer_count))(x)
+    layer_count += 1
+    x = Subtract(name = 'subtract' + str(layer_count))([inpt, x])   # input - noise
+    model = Model(inputs=inpt, outputs=x)
+
+    return model

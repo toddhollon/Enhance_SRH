@@ -16,13 +16,16 @@ import numpy as np
 from keras.layers import Input, Dense
 from keras.models import Model, load_model
 from keras.optimizers import Adam
+
 from keras.metrics import mae
+from keras_contrib.losses import DSSIMObjective
+
 from keras.preprocessing.image import ImageDataGenerator
 from keras.layers import Input, Dense, Conv2D, MaxPooling2D, UpSampling2D
 from keras.models import Model
 from keras import backend as K
 import matplotlib.pyplot as plt
-from model import unet
+from model import Unet, DnCNN
 from imageio import imread
 from skimage.transform import resize
 from skimage.measure import compare_psnr, compare_ssim
@@ -85,7 +88,7 @@ def uniform_noise_generator(batch, sigma = 100):
 
     return batch
 
-def gaussian_noise_generator(batch, sigma_range = (25,150)):
+def gaussian_noise_generator(batch, sigma_range = (10,20)):
     # return image parameters
     batch_size, height, width, channels = batch.shape[0], batch.shape[1], batch.shape[2], batch.shape[3]
 
@@ -125,14 +128,26 @@ def plotting_function_inference(img, noisy_img, pred_img):
 
 def iterate_generator(generator, model):
 
-    img_stack = next(validation_generator)
-    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(50, 51))
+    img_stack = next(generator)
+    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(50, 75))
     decod_img_stack = model.predict(noisy_img_stack)
     
     img = reverse_preprocessing_function(img_stack[0,:,:,:])
     noisy_img = reverse_preprocessing_function(noisy_img_stack[0,:,:,:])
     decod_img = reverse_preprocessing_function(decod_img_stack[0,:,:,:])
     plotting_function_inference(img, noisy_img, decod_img)
+
+def iterate_generator_wo_noise(generator, model):
+
+    img_stack = next(generator)
+    # noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(50, 75))
+    decod_img_stack = model.predict(img_stack)
+    
+    img = reverse_preprocessing_function(img_stack[0,:,:,:])
+    noisy_img = img
+    decod_img = reverse_preprocessing_function(decod_img_stack[0,:,:,:])
+    plotting_function_inference(img, noisy_img, decod_img)
+
 
 def denoise_image(image_path, model, noise_type = gaussian_noise_generator, sigma = 50):
     
@@ -151,9 +166,6 @@ def denoise_image(image_path, model, noise_type = gaussian_noise_generator, sigm
     decod_image = reverse_preprocessing_function(decod_image[0,:,:,:])
     plotting_function_inference(image, noisy_image, decod_image)
 
-    
-
-
 # input_img = Input(shape=(HEIGHT, WIDTH, CHANNELS))
 # x = Conv2D(8, (3, 3), activation='relu', padding='same')(input_img)
 # x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
@@ -170,9 +182,10 @@ if __name__ == "__main__":
     validation_directory = "/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation"
 
     HEIGHT, WIDTH, CHANNELS = 256, 256, 3
-    BATCH_SIZE = 20
+    BATCH_SIZE = 10
 
     unet = load_model("/home/todd/Desktop/Unet_denoiser.hdf5")
+    dncnn = DnCNN(depth = 10, filters=64, image_channels=3, use_bnorm=True) # 20 seems to be too much
 
     # Define the generator
     train_generator = ImageDataGenerator(
@@ -193,11 +206,13 @@ if __name__ == "__main__":
         batch_size = BATCH_SIZE, shuffle = True)
     
     
-    Unet = unet(input_size = (512, 512, 3))
+    unet = Unet(input_size = (HEIGHT, WIDTH, CHANNELS))
+    adam = Adam(lr=0.001)
+    dssim = DSSIMObjective() # YES THIS WORKS
+    dncnn.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
+    unet.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
 
-    Unet = unet(input_size = (HEIGHT, WIDTH, CHANNELS))
-    adam = Adam(lr=0.00005)
-    unet.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
+    # unet.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
 
     unet.fit_generator(denoising_generator(train_generator),
                     epochs=30,
@@ -205,7 +220,9 @@ if __name__ == "__main__":
                     shuffle=True)
 
 
-    iterate_generator(generator=validation_generator, model = unet)
+    iterate_generator(generator=train_generator, model = unet)
+    iterate_generator_wo_noise(generator=train_generator, model = dncnn)
+
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/IDHmut_1p19qnormal/NIO472_1_414.tif", model = unet, sigma=100)
 
 
