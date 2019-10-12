@@ -14,7 +14,7 @@ Perceptual metrics
 
 import numpy as np
 from keras.layers import Input, Dense
-from keras.models import Model
+from keras.models import Model, load_model
 from keras.optimizers import Adam
 from keras.metrics import mae
 from keras.preprocessing.image import ImageDataGenerator
@@ -23,7 +23,10 @@ from keras.models import Model
 from keras import backend as K
 import matplotlib.pyplot as plt
 from model import unet
+from imageio import imread
+from skimage.transform import resize
 from skimage.measure import compare_psnr, compare_ssim
+
 
 def nio_preprocessing_function(image):
     """
@@ -32,7 +35,15 @@ def nio_preprocessing_function(image):
     image[:,:,0] -= 20.0
     image[:,:,1] -= 85.1
     image[:,:,2] -= 94.17
+    image = image.clip(min = -127, max = 127)
     return image
+
+def reverse_preprocessing_function(image):
+    image[:,:,0] += 20.0
+    image[:,:,1] += 85.1
+    image[:,:,2] += 94.17
+    image = image.clip(min = 0, max = 255)
+    return image.astype(np.uint8)
 
 def return_channels(array):
     """
@@ -74,14 +85,13 @@ def uniform_noise_generator(batch, sigma = 100):
 
     return batch
 
-def gaussian_noise_generator(batch, sigma_range = (25,100)):
+def gaussian_noise_generator(batch, sigma_range = (25,150)):
     # return image parameters
     batch_size, height, width, channels = batch.shape[0], batch.shape[1], batch.shape[2], batch.shape[3]
 
     # generate random uniform noise
     sigma = np.random.randint(low = sigma_range[0], high = sigma_range[1])
     noise = np.random.normal(loc=0.0, scale=sigma, size=(batch_size, height, width, channels))
-    # batch = batch.clip(min=-127, max=127)    
 
     return batch + noise
 
@@ -113,28 +123,44 @@ def plotting_function_inference(img, noisy_img, pred_img):
     plt.suptitle("Enhancing stimulated Raman histology")
     plt.show()
 
-
 def iterate_generator(generator, model):
 
-    # img_stack = next(train_generator)
     img_stack = next(validation_generator)
     noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(50, 51))
     decod_img_stack = model.predict(noisy_img_stack)
     
-    img = channel_rescaling(img_stack[0,:,:,:])
-    noisy_img = channel_rescaling(noisy_img_stack[0,:,:,:])
-    decod_img = channel_rescaling(decod_img_stack[0,:,:,:])
+    img = reverse_preprocessing_function(img_stack[0,:,:,:])
+    noisy_img = reverse_preprocessing_function(noisy_img_stack[0,:,:,:])
+    decod_img = reverse_preprocessing_function(decod_img_stack[0,:,:,:])
     plotting_function_inference(img, noisy_img, decod_img)
 
+def denoise_image(image_path, model, noise_type = gaussian_noise_generator, sigma = 50):
+    
+    height = model.input_shape[1]
+    
+    image = imread(image_path).astype(float)
+    image = resize(image, output_shape=(height, height))
+    image = nio_preprocessing_function(image)
+
+    image = image[None,:,:,:]
+    noisy_image = gaussian_noise_generator(image, sigma_range=(sigma, sigma + 1))
+    decod_image = model.predict(noisy_image)
+
+    image = reverse_preprocessing_function(image[0,:,:,:])
+    noisy_image = reverse_preprocessing_function(noisy_image[0,:,:,:])
+    decod_image = reverse_preprocessing_function(decod_image[0,:,:,:])
+    plotting_function_inference(image, noisy_image, decod_image)
+
+    
 
 
-input_img = Input(shape=(HEIGHT, WIDTH, CHANNELS))
-x = Conv2D(8, (3, 3), activation='relu', padding='same')(input_img)
-x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
-x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
-decoded = Conv2D(3, (3, 3), activation='linear', padding='same')(x)
-denoiser = Model(input_img, decoded)
-denoiser.compile(optimizer = Adam(lr = 0.001), loss = 'mean_absolute_error', metrics = ['mae'])
+# input_img = Input(shape=(HEIGHT, WIDTH, CHANNELS))
+# x = Conv2D(8, (3, 3), activation='relu', padding='same')(input_img)
+# x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
+# x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+# decoded = Conv2D(3, (3, 3), activation='linear', padding='same')(x)
+# denoiser = Model(input_img, decoded)
+# denoiser.compile(optimizer = Adam(lr = 0.001), loss = 'mean_absolute_error', metrics = ['mae'])
 
 
 
@@ -144,7 +170,9 @@ if __name__ == "__main__":
     validation_directory = "/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation"
 
     HEIGHT, WIDTH, CHANNELS = 256, 256, 3
-    BATCH_SIZE = 10
+    BATCH_SIZE = 20
+
+    unet = load_model("/home/todd/Desktop/Unet_denoiser.hdf5")
 
     # Define the generator
     train_generator = ImageDataGenerator(
@@ -164,25 +192,21 @@ if __name__ == "__main__":
         target_size = (HEIGHT, WIDTH), interpolation = "bicubic", color_mode = 'rgb', classes = None, class_mode = None, 
         batch_size = BATCH_SIZE, shuffle = True)
     
-    Unet = unet(input_size = (HEIGHT, WIDTH, CHANNELS))
     
-    adam = Adam(lr=0.0005)
-    denoiser.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
+    Unet = unet(input_size = (512, 512, 3))
 
-    Unet.fit_generator(denoising_generator(train_generator),
+    Unet = unet(input_size = (HEIGHT, WIDTH, CHANNELS))
+    adam = Adam(lr=0.00005)
+    unet.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
+
+    unet.fit_generator(denoising_generator(train_generator),
                     epochs=30,
                     steps_per_epoch=1500,
                     shuffle=True)
 
 
-    # img_stack = next(train_generator)
-    img_stack = next(validation_generator)
+    iterate_generator(generator=validation_generator, model = unet)
+    denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/IDHmut_1p19qnormal/NIO472_1_414.tif", model = unet, sigma=100)
 
-    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(400, 401))
-    decod_img_stack = Unet.predict(noisy_img_stack)
-    index = 7
-    img = channel_rescaling(img_stack[index,:,:,:])
-    noisy_img = channel_rescaling(noisy_img_stack[index,:,:,:])
-    decod_img = channel_rescaling(decod_img_stack[index,:,:,:])
-    plotting_function_inference(img, noisy_img, decod_img)
+
 
