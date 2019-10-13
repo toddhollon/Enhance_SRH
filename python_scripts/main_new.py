@@ -88,7 +88,7 @@ def uniform_noise_generator(batch, sigma = 100):
 
     return batch
 
-def gaussian_noise_generator(batch, sigma_range = (10,20)):
+def gaussian_noise_generator(batch, sigma_range = (25,125)):
     # return image parameters
     batch_size, height, width, channels = batch.shape[0], batch.shape[1], batch.shape[2], batch.shape[3]
 
@@ -208,7 +208,8 @@ if __name__ == "__main__":
     
     unet = Unet(input_size = (HEIGHT, WIDTH, CHANNELS))
     adam = Adam(lr=0.001)
-    dssim = DSSIMObjective() # YES THIS WORKS
+    # dssim = DSSIMObjective() # YES THIS WORKS
+    
     dncnn.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
     unet.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
 
@@ -220,7 +221,7 @@ if __name__ == "__main__":
                     shuffle=True)
 
 
-    iterate_generator(generator=train_generator, model = unet)
+    iterate_generator(generator=train_generator, model = dncnn)
     iterate_generator_wo_noise(generator=train_generator, model = dncnn)
 
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/IDHmut_1p19qnormal/NIO472_1_414.tif", model = unet, sigma=100)
