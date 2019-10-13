@@ -11,7 +11,6 @@ Source code to improve stimulated Raman histology images via deep learning-based
   <b>U-Net for SRH image denoising</b><br><br>
   <img src="figures/series/Figure_1_val_25.png" width="1000">
   <img src="figures/series/Figure_1_val_50.png" width="1000">
-  <img src="figures/series/Figure_1_val_75.png" width="1000">
   <img src="figures/series/Figure_1_val_100.png" width="1000">
   <img src="figures/series/Figure_1_val_150.png" width="1000">
   <img src="figures/series/Figure_1_val_200.png" width="1000">
