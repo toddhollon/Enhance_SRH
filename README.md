@@ -8,6 +8,6 @@ Source code to improve stimulated Raman histology images via deep learning-based
 
 
 <p align="center">
-  <b>Pituitary_ML prediction results</b><br><br>
-  <img src="images/Figure 5 probabilities-01.png" width="750">
+  <b>U-Net for SRH image denoising</b><br><br>
+  <img src="figures/series/Figure_1_val_100.png" width="750">
 </p>
