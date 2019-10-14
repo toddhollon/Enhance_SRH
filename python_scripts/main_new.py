@@ -28,6 +28,7 @@ import matplotlib.pyplot as plt
 from model import Unet, DnCNN
 from imageio import imread
 from skimage.transform import resize
+from skimage.filters import gaussian, median
 from skimage.measure import compare_psnr, compare_ssim
 
 
@@ -53,6 +54,10 @@ def return_channels(array):
     Helper function to return channels
     """
     return array[:,:,0], array[:,:,1], array[:,:,2]
+
+def brighten_image(image, factor = 1.2):
+    bright_img = (image * factor).clip(min = 0, max = 255)
+    return bright_img.astype(np.uint8)
 
 def min_max_rescaling(array, percentile_clip = 3):
     p_low, p_high = np.percentile(array, (percentile_clip, 100 - percentile_clip))
@@ -88,7 +93,7 @@ def uniform_noise_generator(batch, sigma = 100):
 
     return batch
 
-def gaussian_noise_generator(batch, sigma_range = (25,125)):
+def gaussian_noise_generator(batch, sigma_range = (25,200)):
     # return image parameters
     batch_size, height, width, channels = batch.shape[0], batch.shape[1], batch.shape[2], batch.shape[3]
 
@@ -112,30 +117,61 @@ def plotting_function_inference(img, noisy_img, pred_img):
 
     fig = plt.figure()
     ax1 = fig.add_subplot(1,3,1)
-    ax1.imshow(img)
+    ax1.imshow(brighten_image(img))
     ax1.set_title("Full resolution image")
 
     ax2 = fig.add_subplot(1,3,2)
-    ax2.imshow(noisy_img)
+    ax2.imshow(brighten_image(noisy_img))
     ax2.set_title("Noisy image: PSNR = " + str(np.round(psnr_mae(img, noisy_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, noisy_img, multichannel=True), decimals=3)))
 
     ax3 = fig.add_subplot(1,3,3)
-    ax3.imshow(pred_img)
+    ax3.imshow(brighten_image(pred_img))
     ax3.set_title("UNet prediction: PSNR = " + str(np.round(psnr_mae(img, pred_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, pred_img, multichannel=True), decimals=3)))
 
     plt.suptitle("Enhancing stimulated Raman histology")
     plt.show()
 
-def iterate_generator(generator, model):
+def plotting_function_inference_with_filter(img, noisy_img, pred_img, filter_type = "gaussian"):
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(1,4,1)
+    ax1.imshow(brighten_image(img))
+    ax1.set_title("Full resolution image")
+
+    ax2 = fig.add_subplot(1,4,2)
+    ax2.imshow(brighten_image(noisy_img))
+    ax2.set_title("Noisy image: PSNR = " + str(np.round(psnr_mae(img, noisy_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, noisy_img, multichannel=True), decimals=3)))
+
+    ax3 = fig.add_subplot(1,4,3)
+    ax3.imshow(brighten_image(pred_img))
+    ax3.set_title("UNet prediction: PSNR = " + str(np.round(psnr_mae(img, pred_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, pred_img, multichannel=True), decimals=3)))
+
+    ax4 = fig.add_subplot(1,4,4)
+    if filter_type == "gaussian":
+        blur_image = gaussian(img, multichannel=True)
+        ax4.imshow(blur_image)
+    if filter_type == "median":
+        blur_image = median(img)
+        ax4.imshow(blur_image)
+    ax4.set_title("Blur filter: PSNR = " + str(np.round(psnr_mae(img, blur_image), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, blur_image, multichannel=True), decimals=3)))
+
+    plt.suptitle("Enhancing stimulated Raman histology")
+    plt.show()
+
+def iterate_generator(generator, model, with_blur = False):
 
     img_stack = next(generator)
-    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(50, 75))
+    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(10,50))
     decod_img_stack = model.predict(noisy_img_stack)
     
     img = reverse_preprocessing_function(img_stack[0,:,:,:])
     noisy_img = reverse_preprocessing_function(noisy_img_stack[0,:,:,:])
     decod_img = reverse_preprocessing_function(decod_img_stack[0,:,:,:])
-    plotting_function_inference(img, noisy_img, decod_img)
+    
+    if with_blur:
+        plotting_function_inference_with_filter(img, noisy_img, decod_img)
+    else:
+        plotting_function_inference(img, noisy_img, decod_img)
 
 def iterate_generator_wo_noise(generator, model):
 
@@ -147,7 +183,6 @@ def iterate_generator_wo_noise(generator, model):
     noisy_img = img
     decod_img = reverse_preprocessing_function(decod_img_stack[0,:,:,:])
     plotting_function_inference(img, noisy_img, decod_img)
-
 
 def denoise_image(image_path, model, noise_type = gaussian_noise_generator, sigma = 50):
     
@@ -165,6 +200,18 @@ def denoise_image(image_path, model, noise_type = gaussian_noise_generator, sigm
     noisy_image = reverse_preprocessing_function(noisy_image[0,:,:,:])
     decod_image = reverse_preprocessing_function(decod_image[0,:,:,:])
     plotting_function_inference(image, noisy_image, decod_image)
+
+def fcnn_loss(input_img, output, beta = 1):
+    # Compute error in reconstruction
+    reconstruction_loss = mae(input_img, output)
+
+    # compute the structural similarity index
+    dssim = DSSIMObjective()
+    structural_loss = dssim(input_img, output)
+
+    total_loss = reconstruction_loss + (beta * structural_loss)
+    return total_loss
+
 
 # input_img = Input(shape=(HEIGHT, WIDTH, CHANNELS))
 # x = Conv2D(8, (3, 3), activation='relu', padding='same')(input_img)
@@ -205,13 +252,11 @@ if __name__ == "__main__":
         target_size = (HEIGHT, WIDTH), interpolation = "bicubic", color_mode = 'rgb', classes = None, class_mode = None, 
         batch_size = BATCH_SIZE, shuffle = True)
     
-    
     unet = Unet(input_size = (HEIGHT, WIDTH, CHANNELS))
-    adam = Adam(lr=0.001)
-    # dssim = DSSIMObjective() # YES THIS WORKS
+    adam = Adam(lr=0.00001)
     
-    dncnn.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
-    unet.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
+    # dncnn.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
+    unet.compile(optimizer=adam, loss=fcnn_loss, metrics=['mae'])
 
     # unet.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
 
@@ -221,10 +266,8 @@ if __name__ == "__main__":
                     shuffle=True)
 
 
-    iterate_generator(generator=train_generator, model = dncnn)
-    iterate_generator_wo_noise(generator=train_generator, model = dncnn)
+    iterate_generator(generator=validation_generator, model = unet, with_blur=True)
+    
+    iterate_generator_wo_noise(generator=validation_generator, model = unet)
 
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/IDHmut_1p19qnormal/NIO472_1_414.tif", model = unet, sigma=100)
-
-    
-
