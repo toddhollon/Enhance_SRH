@@ -271,3 +271,9 @@ if __name__ == "__main__":
     iterate_generator_wo_noise(generator=validation_generator, model = unet)
 
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/IDHmut_1p19qnormal/NIO472_1_414.tif", model = unet, sigma=100)
+
+    denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_488.tif", model = unet, sigma=0)
+    denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_542.tif", model = unet, sigma=0)
+    denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_627.tif", model = unet, sigma=0)
+    denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_627.tif", model = unet)
+    denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_642.tif", model = unet)
