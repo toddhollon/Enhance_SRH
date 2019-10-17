@@ -93,7 +93,7 @@ def uniform_noise_generator(batch, sigma = 100):
 
     return batch
 
-def gaussian_noise_generator(batch, sigma_range = (25,200)):
+def gaussian_noise_generator(batch, sigma_range = (10,100)):
     # return image parameters
     batch_size, height, width, channels = batch.shape[0], batch.shape[1], batch.shape[2], batch.shape[3]
 
@@ -158,10 +158,24 @@ def plotting_function_inference_with_filter(img, noisy_img, pred_img, filter_typ
     plt.suptitle("Enhancing stimulated Raman histology")
     plt.show()
 
+def plotting_function_inference_wo_noise(img, pred_img):
+
+    fig = plt.figure()
+    ax1 = fig.add_subplot(1,2,1)
+    ax1.imshow(brighten_image(img))
+    ax1.set_title("Full resolution image")
+
+    ax3 = fig.add_subplot(1,2,2)
+    ax3.imshow(brighten_image(pred_img))
+    ax3.set_title("UNet prediction: PSNR = " + str(np.round(psnr_mae(img, pred_img), decimals = 3)) + " SSIM = " + str(np.round(compare_ssim(img, pred_img, multichannel=True), decimals=3)))
+
+    plt.suptitle("Enhancing stimulated Raman histology")
+    plt.show()
+
 def iterate_generator(generator, model, with_blur = False):
 
     img_stack = next(generator)
-    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(10,50))
+    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(10,20))
     decod_img_stack = model.predict(noisy_img_stack)
     
     img = reverse_preprocessing_function(img_stack[0,:,:,:])
@@ -200,6 +214,22 @@ def denoise_image(image_path, model, noise_type = gaussian_noise_generator, sigm
     noisy_image = reverse_preprocessing_function(noisy_image[0,:,:,:])
     decod_image = reverse_preprocessing_function(decod_image[0,:,:,:])
     plotting_function_inference(image, noisy_image, decod_image)
+
+def denoise_image_wo_noise(image_path, model):
+    
+    height = model.input_shape[1]
+    
+    image = imread(image_path).astype(float)
+    image = resize(image, output_shape=(height, height))
+    image = nio_preprocessing_function(image)
+
+    image = image[None,:,:,:]
+    decod_image = model.predict(image)
+
+    image = reverse_preprocessing_function(image[0,:,:,:])
+    decod_image = reverse_preprocessing_function(decod_image[0,:,:,:])
+    plotting_function_inference_wo_noise(image, decod_image)
+
 
 def fcnn_loss(input_img, output, beta = 1):
     # Compute error in reconstruction
@@ -253,12 +283,12 @@ if __name__ == "__main__":
         batch_size = BATCH_SIZE, shuffle = True)
     
     unet = Unet(input_size = (HEIGHT, WIDTH, CHANNELS))
-    adam = Adam(lr=0.00001)
+    adam = Adam(lr=0.000001)
     
     # dncnn.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
     unet.compile(optimizer=adam, loss=fcnn_loss, metrics=['mae'])
 
-    # unet.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
+    unet.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
 
     unet.fit_generator(denoising_generator(train_generator),
                     epochs=30,
@@ -266,15 +296,13 @@ if __name__ == "__main__":
                     shuffle=True)
 
 
-    iterate_generator(generator=validation_generator, model = unet, with_blur=True)
+    iterate_generator(generator=train_generator, model = unet, with_blur=True)
     
     iterate_generator_wo_noise(generator=validation_generator, model = unet)
-
-    denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/IDHmut_1p19qnormal/NIO472_1_414.tif", model = unet, sigma=100)
 
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_488.tif", model = unet, sigma=0)
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_542.tif", model = unet, sigma=0)
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_627.tif", model = unet, sigma=0)
+    
     denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_627.tif", model = unet)
-    denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_642.tif", model = unet)    denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_642.tif", model = unet)
-    denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_642.tif", model = unet)    denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_642.tif", model = unet)
+    denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_642.tif", model = unet)    
