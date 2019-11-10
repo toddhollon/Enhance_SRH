@@ -108,6 +108,10 @@ def denoising_generator(generator, noise_function = gaussian_noise_generator):
         noisy_batch = noise_function(batch)
         yield noisy_batch, batch
 
+def autoencoder_generator(generator):
+    for batch in generator:
+        yield batch, batch
+
 def psnr_mae(image1, image2):
     error = np.abs(np.mean(np.subtract(image1.astype(float), image2.astype(float))))
     psnr = 10 * np.log10(255/error)
@@ -243,14 +247,34 @@ def fcnn_loss(input_img, output, beta = 1):
     return total_loss
 
 
-# input_img = Input(shape=(HEIGHT, WIDTH, CHANNELS))
-# x = Conv2D(8, (3, 3), activation='relu', padding='same')(input_img)
-# x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
-# x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
-# decoded = Conv2D(3, (3, 3), activation='linear', padding='same')(x)
-# denoiser = Model(input_img, decoded)
-# denoiser.compile(optimizer = Adam(lr = 0.001), loss = 'mean_absolute_error', metrics = ['mae'])
+    # input_img = Input(shape=(HEIGHT, WIDTH, CHANNELS))
+    # x = Conv2D(8, (3, 3), activation='relu', padding='same')(input_img)
+    # x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
+    # x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+    # decoded = Conv2D(3, (3, 3), activation='linear', padding='same')(x)
+    # denoiser = Model(input_img, decoded)
+    # denoiser.compile(optimizer = Adam(lr = 0.001), loss = 'mean_absolute_error', metrics = ['mae'])
 
+def Autoencoder(input_size = (HEIGHT, WIDTH, CHANNELS)):
+    input_img = Input(shape = input_size) 
+
+    x = Conv2D(16, (3, 3), activation='relu', padding='same')(input_img)
+    x = MaxPooling2D((2, 2), padding='same')(x)
+    x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+    x = MaxPooling2D((2, 2), padding='same')(x)
+    x = Conv2D(64, (3, 3), activation='relu', padding='same')(x)
+    encoded = MaxPooling2D((2, 2), padding='same')(x)
+
+    # at this point the representation is (4, 4, 8) i.e. 128-dimensional
+    x = Conv2D(64, (3, 3), activation='relu', padding='same')(encoded)
+    x = UpSampling2D((2, 2))(x)
+    x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+    x = UpSampling2D((2, 2))(x)
+    x = Conv2D(16, (3, 3), activation='relu', padding='same')(x)
+    x = UpSampling2D((2, 2))(x)
+    decoded = Conv2D(3, (3, 3), activation='linear', padding='same')(x)
+    autoencoder = Model(input_img, decoded)
+    return autoencoder
 
 
 if __name__ == "__main__":
@@ -283,14 +307,15 @@ if __name__ == "__main__":
         batch_size = BATCH_SIZE, shuffle = True)
     
     unet = Unet(input_size = (HEIGHT, WIDTH, CHANNELS))
-    adam = Adam(lr=0.000001)
-    
+    adam = Adam(lr=0.00001)
+    autoencoder_model = Autoencoder()
     # dncnn.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
     unet.compile(optimizer=adam, loss=fcnn_loss, metrics=['mae'])
-
     unet.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
+    autoencoder_model.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
 
-    unet.fit_generator(denoising_generator(train_generator),
+
+    autoencoder_model.fit_generator(autoencoder_generator(train_generator),
                     epochs=30,
                     steps_per_epoch=1500,
                     shuffle=True)
@@ -298,7 +323,7 @@ if __name__ == "__main__":
 
     iterate_generator(generator=train_generator, model = unet, with_blur=True)
     
-    iterate_generator_wo_noise(generator=validation_generator, model = unet)
+    iterate_generator_wo_noise(generator=validation_generator, model = autoencoder_model)
 
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_488.tif", model = unet, sigma=0)
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_542.tif", model = unet, sigma=0)
