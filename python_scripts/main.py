@@ -325,7 +325,7 @@ if __name__ == "__main__":
     
     iterate_generator_wo_noise(generator=validation_generator, model = autoencoder_model)
 
-    denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_488.tif", model = unet, sigma=0)
+    denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_488.tif", model = unet, sigma=10)
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_542.tif", model = unet, sigma=0)
     denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_627.tif", model = unet, sigma=0)
     
