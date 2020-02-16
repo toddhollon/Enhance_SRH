@@ -12,6 +12,9 @@ Perceptual metrics
 
 '''
 
+import matplotlib
+matplotlib.use('tkagg')
+
 import numpy as np
 from keras.layers import Input, Dense
 from keras.models import Model, load_model
@@ -26,11 +29,16 @@ from keras.models import Model
 from keras import backend as K
 import matplotlib.pyplot as plt
 from model import Unet, DnCNN
+from unet_architectures import *
 from imageio import imread
 from skimage.transform import resize
 from skimage.filters import gaussian, median
 from skimage.measure import compare_psnr, compare_ssim
+from keras.utils import multi_gpu_model
 
+
+HEIGHT, WIDTH, CHANNELS = 256, 256, 3
+BATCH_SIZE = 10
 
 def nio_preprocessing_function(image):
     """
@@ -179,7 +187,7 @@ def plotting_function_inference_wo_noise(img, pred_img):
 def iterate_generator(generator, model, with_blur = False):
 
     img_stack = next(generator)
-    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(10,20))
+    noisy_img_stack = gaussian_noise_generator(img_stack, sigma_range=(50,100))
     decod_img_stack = model.predict(noisy_img_stack)
     
     img = reverse_preprocessing_function(img_stack[0,:,:,:])
@@ -279,14 +287,11 @@ def Autoencoder(input_size = (HEIGHT, WIDTH, CHANNELS)):
 
 if __name__ == "__main__":
     
-    training_directory = "/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/training"
-    validation_directory = "/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation"
+    training_directory = "/home/todd/Desktop/github_repos/Enhance_SRH/training_patches/training"
+    validation_directory = "/home/todd/Desktop/github_repos/Enhance_SRH/training_patches/validation"
 
-    HEIGHT, WIDTH, CHANNELS = 256, 256, 3
-    BATCH_SIZE = 10
-
-    unet = load_model("/home/todd/Desktop/Unet_denoiser.hdf5")
-    dncnn = DnCNN(depth = 10, filters=64, image_channels=3, use_bnorm=True) # 20 seems to be too much
+    # unet = load_model("/home/todd/Desktop/Unet_denoiser.hdf5")
+    # dncnn = DnCNN(depth = 10, filters=64, image_channels=3, use_bnorm=True) # 20 seems to be too much
 
     # Define the generator
     train_generator = ImageDataGenerator(
@@ -306,28 +311,37 @@ if __name__ == "__main__":
         target_size = (HEIGHT, WIDTH), interpolation = "bicubic", color_mode = 'rgb', classes = None, class_mode = None, 
         batch_size = BATCH_SIZE, shuffle = True)
     
-    unet = Unet(input_size = (HEIGHT, WIDTH, CHANNELS))
+    # unet = Unet(input_size = (HEIGHT, WIDTH, CHANNELS))
+    # model_att_r2_unet = att_r2_unet(HEIGHT, WIDTH, CHANNELS)
+
+    
+    # model_att_r2_unet = multi_gpu_model(model_att_r2_unet, gpus=2)
+    # unet_multi = multi_gpu_model(unet, gpus=2)
+
     adam = Adam(lr=0.00001)
-    autoencoder_model = Autoencoder()
-    # dncnn.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
-    unet.compile(optimizer=adam, loss=fcnn_loss, metrics=['mae'])
-    unet.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
-    autoencoder_model.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
+    # unet.compile(optimizer=adam, loss="mean_absolute_error", metrics=['mae'])
+    # unet.compile(optimizer=adam, loss=fcnn_loss, metrics=['mae'])
+    # model_att_r2_unet.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
+    # autoencoder_model.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
 
+    model = load_model("/home/todd/Desktop/github_repos/Enhance_SRH/training_patches/model_att_r2_unet.hdf5")
+    model = multi_gpu_model(model, gpus=2)
+    model.compile(optimizer=adam, loss='mean_absolute_error', metrics=['mae'])
 
-    autoencoder_model.fit_generator(autoencoder_generator(train_generator),
-                    epochs=30,
+    model.fit_generator(denoising_generator(train_generator),
+                    epochs=50,
                     steps_per_epoch=1500,
                     shuffle=True)
 
+    model.save("model_att_r2_bigrun.hdf5")
+    model.save_weights("model_att_r2_bigrun_weights.hdf5")
 
-    iterate_generator(generator=train_generator, model = unet, with_blur=True)
+    # iterate_generator(generator=train_generator, model = unet, with_blur=True)
+    # iterate_generator_wo_noise(generator=validation_generator, model = model)
+    # iterate_generator(generator=validation_generator, model = model)
+    # denoise_image(image_path="/home/todd/Desktop/github_repos/Enhance_SRH/training_patches/validation/IDHmut/NIO439_1_488.tif", model = model, sigma=10)
+    # # denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_542.tif", model = unet, sigma=0)
+    # # denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_627.tif", model = unet, sigma=0)
     
-    iterate_generator_wo_noise(generator=validation_generator, model = autoencoder_model)
-
-    denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_488.tif", model = unet, sigma=10)
-    denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_542.tif", model = unet, sigma=0)
-    denoise_image(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_627.tif", model = unet, sigma=0)
-    
-    denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_627.tif", model = unet)
-    denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_642.tif", model = unet)    
+    # denoise_image_wo_noise(image_path="/home/todd/Desktop/github_repos/Enhance_SRH/training_patches/validation/IDHmut/NIO439_1_627.tif", model = model)
+    # # denoise_image_wo_noise(image_path="/home/todd/Desktop/SRH_genetics/srh_patches/patches/training_patches/validation/IDHmut/NIO439_1_642.tif", model = unet)    
