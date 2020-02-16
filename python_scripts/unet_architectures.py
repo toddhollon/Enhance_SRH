@@ -169,7 +169,7 @@ def unet(img_w = 256, img_h = 256, img_channls = 3, data_format='channels_last')
         x = Dropout(0.2)(x)
         x = Conv2D(features, (3, 3), activation='relu', padding='same', data_format=data_format)(x)
 
-    conv6 = Conv2D(n_label, (1, 1), padding='same', data_format=data_format)(x)
+    conv6 = Conv2D(img_channls, (1, 1), padding='same', data_format=data_format)(x)
     conv7 = core.Activation('linear')(conv6)
     model = Model(inputs=inputs, outputs=conv7)
 
